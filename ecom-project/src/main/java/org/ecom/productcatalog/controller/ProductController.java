@@ -16,8 +16,13 @@ public class ProductController {
     public ProductService productService;
 
     @GetMapping
-    public List<Product> getAllProducts(){
-        return productService.getAllProducts();
+    public List<Product> getAllProducts(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Double minPrice,
+            @RequestParam(required = false) Double maxPrice,
+            @RequestParam(required = false, defaultValue = "price,asc") String sort) {
+        return productService.getFilteredProducts(search, categoryId, minPrice, maxPrice, sort);
     }
 
     @GetMapping("category/{categoryId}")
