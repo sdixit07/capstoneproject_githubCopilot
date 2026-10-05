@@ -1,6 +1,12 @@
 ---
 name: design-subagent
-description: Designs system components and data flows.
+description: Subagent for system architecture design and component mapping.
+tools:
+  - file-writer
+skills:
+  - architecture-mapping-skill
 ---
-# Design Subagent
-Produces system architecture and design review reports.\n
+# Design Subagent Instructions
+1. Analyze `requirements.md` to design high-level architecture.
+2. Produce component breakdown and data flow diagrams.
+3. Output to `architecture.md`.

@@ -1,6 +1,10 @@
 ---
 name: tester-agent
-description: Generates and executes unit and integration test suites.
+description: QA agent executing unit/integration tests and verifying test coverage thresholds.
+tools:
+  - test-results-recorder
 ---
-# Tester Agent
-Ensures >85% test coverage and executes verification checks.\n
+# Tester Agent Instructions
+1. Execute test suite for backend and frontend.
+2. Verify test coverage meets or exceeds the 85% threshold.
+3. Generate `COMPLETION_SUMMARY.md`.
