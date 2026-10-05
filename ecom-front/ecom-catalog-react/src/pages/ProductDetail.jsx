@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { fetchProductById } from '../api/productsApi'
 
 const ProductDetail = () => {
   const { id } = useParams()
@@ -15,20 +16,16 @@ const ProductDetail = () => {
     setNotFound(false)
 
     try {
-      const res = await fetch(`http://localhost:8080/api/products/${id}`)
-      if (res.status === 404) {
-        setNotFound(true)
-        setProduct(null)
-        return
-      }
-      if (!res.ok) {
-        throw new Error(`Request failed with status ${res.status}`)
-      }
-      const data = await res.json()
+      const data = await fetchProductById(id)
       setProduct(data)
     } catch (e) {
-      setError(e?.message ?? 'Failed to load product')
-      setProduct(null)
+      if (e?.status === 404) {
+        setNotFound(true)
+        setProduct(null)
+      } else {
+        setError(e?.message ?? 'Failed to load product')
+        setProduct(null)
+      }
     } finally {
       setLoading(false)
     }

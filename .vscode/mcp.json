@@ -1,0 +1,51 @@
+{
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "github_token",
+      "description": "GitHub personal access token",
+      "password": true
+    },
+    {
+      "type": "promptString",
+      "id": "jira_base_url",
+      "description": "Jira base URL"
+    },
+    {
+      "type": "promptString",
+      "id": "jira_user_email",
+      "description": "Jira user email"
+    },
+    {
+      "type": "promptString",
+      "id": "jira_api_token",
+      "description": "Jira API token",
+      "password": true
+    }
+  ],
+  "servers": {
+    "github-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${input:github_token}"
+      }
+    },
+    "jira-mcp": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "mcp-atlassian"
+      ],
+      "env": {
+        "JIRA_URL": "${input:jira_base_url}",
+        "JIRA_USERNAME": "${input:jira_user_email}",
+        "JIRA_API_TOKEN": "${input:jira_api_token}"
+      }
+    }
+  }
+}
