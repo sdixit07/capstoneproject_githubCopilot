@@ -27,6 +27,7 @@
     "github-mcp": {
       "type": "stdio",
       "command": "npx",
+      "enabled": true,
       "args": [
         "-y",
         "@modelcontextprotocol/server-github"
@@ -38,6 +39,7 @@
     "jira-mcp": {
       "type": "stdio",
       "command": "uvx",
+      "enabled": true,
       "args": [
         "mcp-atlassian"
       ],
