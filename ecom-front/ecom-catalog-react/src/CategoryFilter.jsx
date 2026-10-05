@@ -1,6 +1,6 @@
-const CategoryFilter = ({categories, onSelect}) => {
+const CategoryFilter = ({ categories, selectedCategory, onSelect }) => {
     return(
-            <select id="categorySelect" className="form-control" onChange={(e) => onSelect(e.target.value)}>
+            <select id="categorySelect" className="form-control" value={selectedCategory} onChange={(e) => onSelect(e.target.value)}>
                 <option value=""> All Categories</option>
                 {categories.map(category =>(
                     <option key={category.id} value={category.id}>{category.name}</option>

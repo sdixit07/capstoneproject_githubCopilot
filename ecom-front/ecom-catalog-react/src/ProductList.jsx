@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 const ProductList = ({products}) => {
     return(
         <div className="row">
@@ -12,6 +14,7 @@ const ProductList = ({products}) => {
                             <h5 className="card-title">{product.name}</h5>
                             <p className="card-text">{product.description}</p>
                             <p className="card-text"><strong>${product.price}</strong></p>
+                            <Link to={`/products/${product.id}`} className="btn btn-primary">View details</Link>
                         </div>       
                     </div>    
                 </div>    

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { fetchCategories, fetchProducts } from './productsApi';
 
@@ -20,7 +20,10 @@ describe('productsApi', () => {
     });
 
     const data = await fetchProducts({ page: 1, size: 5, search: 'phone', categoryId: 2, sort: 'price,desc' });
-    expect(globalThis.fetch).orOnlyCalled();
+    expect(globalThis.fetch).toHaveBeenCalledOnce();
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/api/products?page=1&size=5&search=phone&categoryId=2&sort=price%2Cdesc'
+    );
     expect(data).toHaveProperty('items');
   });
 
@@ -31,6 +34,7 @@ describe('productsApi', () => {
     });
 
     const data = await fetchCategories();
+    expect(globalThis.fetch).toHaveBeenCalledWith('http://localhost:8080/api/categories');
     expect(Array.isArray(data)).toBe(true);
   });
 });
