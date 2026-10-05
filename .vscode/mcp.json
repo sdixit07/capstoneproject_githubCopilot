@@ -26,6 +26,7 @@
   "servers": {
     "github-mcp": {
       "type": "stdio",
+      "enabled": true,
       "command": "npx",
       "args": [
         "-y",
@@ -37,6 +38,7 @@
     },
     "jira-mcp": {
       "type": "stdio",
+      "enabled": true,
       "command": "uvx",
       "args": [
         "mcp-atlassian"
