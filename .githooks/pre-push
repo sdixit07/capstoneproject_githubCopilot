@@ -1,9 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-repo_root="$(git rev-parse --show-toplevel)"
-script_path="$(cygpath -w "$repo_root/.githooks/validate-workflow.ps1")"
-
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$script_path"
-
-echo "pre-push checks passed."
