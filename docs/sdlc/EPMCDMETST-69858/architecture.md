@@ -48,13 +48,15 @@ Invalid page/size or filter/sort values
 
 - `ProductService` (`service/ProductService.java`)
   - Owns the translation of existing catalog filters and sort choices into repository query criteria.
-  - Creates the `Pageable` sort while preserving the current default ordering (`id` ascending), price sort support, and tie-break direction. Existing behavior supports `price` with optional `asc`/`desc`; unsupported sort fields remain bad requests.
+  - Creates the `Pageable` sort while preserving the current default ordering (`id` ascending), exact supported price sort grammar (`price`, `price,asc`, `price,desc`), and tie-break direction. `price` defaults to ascending. Unsupported properties, directions, extra sort segments, or malformed sort values remain HTTP 400. A present blank sort value is invalid; an omitted sort parameter uses ID ascending.
+  - Uses page `0` and size `10` as server defaults only; it does not retain a size fallback of `12`.
   - Delegates to the repository's pageable filtered query and maps its content and metadata into `ProductPageResponse`.
   - Keeps existing price-bound validation and inclusive min/max behavior. Search remains a case-insensitive product-name substring match; category and price constraints remain conjunctive.
 
 - `ProductRepository` (`repository/ProductRepository.java`)
   - Continues to extend `JpaRepository<Product, Long>` and adds `JpaSpecificationExecutor<Product>` (or an equivalent Spring Data query abstraction) so the product selection and matching count are performed in the database with a `Pageable`.
-  - The paged query must count after applying the same search, category, and price predicates as the content query. The existing category-specific lookup stays intact.
+  - Exposes `Page<Product> findAll(Specification<Product> specification, Pageable pageable)`, using one `Specification<Product>` instance built for search/category/min-price/max-price predicates.
+  - The framework calls that same specification for item selection and count metadata, so `totalItems`/`totalPages` are derived from the identical predicate set as `items`. The existing category-specific lookup stays intact.
 
 - `Product` and `Category` entities
   - Continue to represent the existing product and category model. Product is `org.ecom.productcatalog.Product`; its `category` relationship supplies category filtering.
@@ -94,6 +96,7 @@ No frontend behavior change is in scope. These current components remain the exi
 - Spring Data JPA repository query with `JpaSpecificationExecutor`/JPA criteria
   - Allows existing optional filters to be applied consistently to both page content and count queries, avoiding retrieval of the entire catalog in Java.
   - Uses the current persistence technology and requires no new framework.
+  - `JpaSpecificationExecutor.findAll(specification, pageable)` makes one specification responsible for both content and framework count queries.
 - Existing `ProductPageResponse`
   - Already defines the required stable JSON fields and avoids coupling clients to Spring Data's implementation-specific `Page` serialization.
 - Existing `GlobalExceptionHandler`
@@ -130,19 +133,21 @@ No frontend behavior change is in scope. These current components remain the exi
 
 - Repository
   - Extend `ProductRepository` with `JpaSpecificationExecutor<Product>` while retaining `JpaRepository<Product, Long>` and `findByCategoryId`.
-  - Query contract: return `Page<Product>` for a filter specification and a supplied `Pageable`.
-  - The specification combines optional predicates: case-insensitive name contains `search`; matching category ID; `price >= minPrice`; and `price <= maxPrice`.
-  - Let Spring Data execute an appropriately filtered count query for `totalItems`.
+  - Query contract: `Page<Product> findAll(Specification<Product> specification, Pageable pageable)`.
+  - One service-owned specification builder combines optional predicates: case-insensitive name contains `search`; matching category ID; `price >= minPrice`; and `price <= maxPrice`.
+  - Pass that same immutable specification instance to `findAll(specification, pageable)` for content and framework count. Do not separately query and count with a different predicate path.
 
 - Service
   - The list operation always returns `ProductPageResponse`; there is no separate unpaged code path for this endpoint.
   - Preserve current validation: negative price bounds and `minPrice > maxPrice` remain HTTP 400.
-  - Resolve ordering to match current behavior: default `id ASC`; `price,asc` orders by price then ID ascending; `price,desc` orders by price then ID descending. A `sort=price` without direction defaults to ascending. Unsupported properties/directions should retain bad-request handling rather than becoming arbitrary database sort properties.
+  - Resolve ordering with exact grammar: omitted `sort` means ID ascending; `price` means price ascending; `price,asc` means price ascending then ID ascending; `price,desc` means price descending then ID descending. In both price directions, ID is the tie-breaker in the same direction. Reject any present value other than the exact forms above, including unsupported properties, unsupported directions, extra segments, casing changes, or surrounding whitespace.
+  - Server pagination resolution belongs only in the controller: page `null` -> `0`, size `null` -> `10`. The service has no size fallback and must not retain or reintroduce the current fallback of `12`.
   - Map `Page<Product>.getContent()`, effective page index and size, total elements, and total pages into the DTO.
 
 - Controller and validation
   - Keep query parameter names unchanged. Define effective defaults as `page=0` and `size=10`.
   - Validate page `>= 0` and size `>= 1` before constructing `PageRequest`. Non-numeric page/size remains a Spring request binding error and maps to HTTP 400.
+  - Do not impose an application maximum size. Before constructing or executing a pageable, calculate the requested `page * size` offset safely (using a representable arithmetic type) and reject with HTTP 400 if the offset cannot be represented or safely processed by the database. This is numeric rejection, not clamping or an unapproved maximum-size policy.
   - Avoid `@PageableDefault` behavior that could obscure the required strict invalid-input behavior; the controller/service may accept a `Pageable` internally while explicitly validating the request values used to construct it.
 
 - Error mapping
@@ -180,6 +185,8 @@ No frontend behavior change is in scope. These current components remain the exi
 | `minPrice` | Yes | Existing inclusive lower bound |
 | `maxPrice` | Yes | Existing inclusive upper bound |
 | `sort` | Yes | Existing price sort (`price[,asc|desc]`); default product ID ascending |
+
+Supported sort values are exactly `price`, `price,asc`, or `price,desc`. An omitted sort value uses ID ascending. `price`/`price,asc` use ascending price with ID ascending as the tie-breaker; `price,desc` uses descending price with ID descending as the tie-breaker. Any other present sort value is HTTP 400.
 
 ### Success response
 
@@ -266,6 +273,30 @@ GET /api/products?page=0&size=10
 - Database/unexpected failures remain server errors under existing Spring handling; do not convert them to a successful empty page.
 - `App.jsx` retains its existing loading/error handling; no frontend error-state change is required.
 
+## Backend HTTP/response verification matrix
+
+The existing legacy integration-test assertions must be replaced; the backend test suite will verify the envelope and the following matrix with MockMvc:
+
+| Case | Request shape | Expected result |
+|---|---|---|
+| Default pagination | `GET /api/products` | HTTP 200; envelope; `page=0`, `size=10`, items at most 10, filtered metadata |
+| Normal first page | `page=0&size=10` | HTTP 200; at most 10 items; `page=0`, `size=10` |
+| Normal later page | `page=2&size=10` | HTTP 200; at most 10 items; `page=2`, `size=10` |
+| Out-of-range page | valid `page` beyond final page | HTTP 200; `items=[]`; requested page/size and matching total metadata |
+| No matching filters | valid filter with no matches | HTTP 200; `items=[]`, `totalItems=0`, `totalPages=0` |
+| Negative page | `page=-1&size=10` | HTTP 400 `ApiError` |
+| Zero size | `page=0&size=0` | HTTP 400 `ApiError` |
+| Negative size | `page=0&size=-1` | HTTP 400 `ApiError` |
+| Malformed pagination | non-numeric page or size | HTTP 400 `ApiError` |
+| Unrepresentable offset | page/size combination whose safe offset cannot be represented or processed | HTTP 400 `ApiError`; never clamp |
+| Combined filters | search/category/minPrice/maxPrice with pagination | HTTP 200; items and metadata use the same conjunctive predicates |
+| Default sort | omitted sort | HTTP 200; ID ascending |
+| Sort ascending | `sort=price,asc` | HTTP 200; price ascending, ID ascending for ties |
+| Bare sort price | `sort=price` | HTTP 200; price ascending, ID ascending for ties |
+| Sort descending | `sort=price,desc` | HTTP 200; price descending, ID descending for ties |
+| Invalid sort | unsupported field, direction, extra segment, or malformed/present blank value | HTTP 400 `ApiError` |
+| Category legacy path | `/api/products/category/{categoryId}` | HTTP 200; existing array behavior unchanged |
+
 ## Risks
 
 - **Response contract change:** clients expecting the old no-parameter array will break. This is intentional and approved; identify any consumers outside this repository before release.
@@ -273,7 +304,18 @@ GET /api/products?page=0&size=10
 - **Metadata/content consistency:** selection and count predicates must be identical, or `totalItems` and `totalPages` can disagree with the returned page.
 - **Sort stability:** preserve the existing default ordering and price ordering/tie-break behavior to avoid products moving unexpectedly between pages.
 - **Unbounded requested size:** the requirements specify no maximum size. Extremely large positive `size` values can still produce expensive requests; any maximum would require a product decision because silently imposing one would change the accepted contract.
+- **Numeric offset safety:** no maximum size is introduced. Only offsets that cannot be represented or safely processed are rejected; a very large but representable, processable offset is not clamped.
 - **Existing `KNOWN-ISSUES` file unavailable:** `docs/KNOWN-ISSUES.md` is absent from the checked-out repository, so no additional documented known issues could be incorporated.
+
+## Changes after design review
+
+| Decision ID | What changed | Updated architecture location |
+|---|---|---|
+| D-1 | Replaced the legacy verification gap with an explicit backend HTTP/response test matrix covering server defaults, normal and out-of-range pages, invalid pagination, combined filters/sorts, exact sort forms, and unchanged category-path behavior. | **Backend HTTP/response verification matrix** |
+| D-2 | Made the sort contract exact: omitted sort -> ID ascending; `price` -> price ascending; `price,asc` -> price ascending/ID ascending; `price,desc` -> price descending/ID descending. Present unsupported, malformed, or extra-segment values are rejected as HTTP 400. | `ProductService`, `sort` API parameter, LLD service/controller, verification matrix |
+| D-3 | Restricted server pagination defaults to page `0` and size `10`; removed the service fallback of `12`. The existing React size `12` remains an explicit caller value and is not the server default. | Component responsibilities, service, controller/validation, API contract, frontend state |
+| D-4 | Defined one `Specification<Product>` builder for search/category/min-price/max-price and required it to be passed unchanged to `findAll(specification, pageable)`, which supplies both page content and framework count metadata. | Repository, service/repository data flow, LLD repository/service |
+| D-5 | Added a no-maximum-size policy and a safe-offset rule: calculate the requested offset without overflow, reject it with HTTP 400 when it cannot be represented or safely processed, and never clamp valid size values or add an unapproved bound. | Controller/validation LLD, error handling, numeric-safety risk |
 
 ## FR → design traceability
 
