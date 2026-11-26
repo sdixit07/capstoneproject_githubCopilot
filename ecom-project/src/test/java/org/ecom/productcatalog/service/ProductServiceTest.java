@@ -111,4 +111,15 @@ class ProductServiceTest {
                 () -> productService.getPagedProducts(null, null, -1.0, null, null, PageRequest.of(0, 10)));
         org.mockito.Mockito.verifyNoInteractions(productRepository);
     }
+
+    @Test
+    void getPagedProducts_rejectsNonFinitePriceBoundsBeforeQuerying() {
+        for (Double value : List.of(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY)) {
+            assertThrows(IllegalArgumentException.class,
+                    () -> productService.getPagedProducts(null, null, value, null, null, PageRequest.of(0, 10)));
+            assertThrows(IllegalArgumentException.class,
+                    () -> productService.getPagedProducts(null, null, null, value, null, PageRequest.of(0, 10)));
+        }
+        org.mockito.Mockito.verifyNoInteractions(productRepository);
+    }
 }
