@@ -65,10 +65,15 @@ public class ProductService {
             List<Predicate> predicates = new ArrayList<>();
 
             if (search != null && !search.isBlank()) {
-                String searchPattern = "%" + search.toLowerCase(Locale.ROOT) + "%";
+                String escapedSearch = search.toLowerCase(Locale.ROOT)
+                        .replace("\\", "\\\\")
+                        .replace("%", "\\%")
+                        .replace("_", "\\_");
+                String searchPattern = "%" + escapedSearch + "%";
                 predicates.add(criteriaBuilder.like(
                         criteriaBuilder.lower(root.<String>get("name")),
-                        searchPattern
+                        searchPattern,
+                        '\\'
                 ));
             }
             if (categoryId != null) {
@@ -86,6 +91,12 @@ public class ProductService {
     }
 
     private void validatePriceBounds(Double minPrice, Double maxPrice) {
+        if (minPrice != null && !Double.isFinite(minPrice)) {
+            throw new IllegalArgumentException("minPrice must be finite");
+        }
+        if (maxPrice != null && !Double.isFinite(maxPrice)) {
+            throw new IllegalArgumentException("maxPrice must be finite");
+        }
         if (minPrice != null && minPrice < 0) {
             throw new IllegalArgumentException("minPrice must not be negative");
         }

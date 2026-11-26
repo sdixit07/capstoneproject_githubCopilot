@@ -29,7 +29,7 @@
 - `ecom-project/src/test/java/org/ecom/productcatalog/controller/ProductControllerIntegrationTest.java`
 - `docs/sdlc/EPMCDMETST-69858/implementation-notes.md`
 
-No frontend, entity/schema, Maven wrapper, or existing `*IT.java` test changes were made.
+The initial implementation changed no frontend, entity/schema, Maven wrapper, or existing `*IT.java` tests. The Step 5 fix-mode changes to the legacy integration suite and Maven discovery are recorded below.
 
 ## Tests and verification
 
@@ -44,3 +44,19 @@ No frontend, entity/schema, Maven wrapper, or existing `*IT.java` test changes w
 - T-4 required no source change because `GlobalExceptionHandler` already handled `IllegalArgumentException` and parameter type mismatches using the required `ApiError` shape; integration tests verified this behavior.
 - T-6 uses a new `ProductControllerIntegrationTest.java` rather than modifying the existing `ProductControllerIT.java`. This respects the required Surefire test naming and leaves existing known-issue tests untouched.
 - Known issue descriptions for KI-1 through KI-3 could not be recorded because `docs/KNOWN-ISSUES.md` is absent. No blocker prevented implementation or verification.
+
+## Step 5 — Fix mode
+
+### Fixes applied
+
+- Updated the legacy `ProductControllerIT` assertions for `GET /api/products` to validate the paginated envelope and its default metadata. Configured Maven Surefire to discover `*IT.java` alongside its standard test-name patterns.
+- Escaped backslash, percent, and underscore in product-name search literals and supplied the explicit backslash escape character to the JPA `LIKE` predicate. Added integration coverage proving each character is matched literally.
+- Rejected non-finite `minPrice` and `maxPrice` values with `IllegalArgumentException`, preserving the existing HTTP 400 `ApiError` mapping. Added service and endpoint regression tests for NaN and positive/negative infinity.
+
+### Fix-mode verification
+
+- Targeted tests: `.\mvnw.cmd '-Dtest=ProductServiceTest,ProductControllerIT' test` — **20 passed, 0 failures, 0 errors, 0 skipped** (`ProductServiceTest`: 5; `ProductControllerIT`: 15). Maven discovered and executed the `*IT.java` suite.
+- Package: `.\mvnw.cmd -DskipTests package` — **BUILD SUCCESS**.
+- Packaged application start: **successful**. `GET http://localhost:8080/api/products` returned HTTP 200 with the expected envelope (`page=0`, `size=10`, `items` array, `totalItems=4`, `totalPages=1`). The smoke-test process was stopped and port 8080 was confirmed closed.
+- Baseline delta: the recorded baseline remains unchanged (one passing backend test). The targeted fix-mode run executed 19 more tests than that baseline, with zero failures/errors; no baseline rerun was performed.
+- Startup emitted existing Hibernate dialect and open-in-view warnings; no startup, endpoint, or test errors occurred.

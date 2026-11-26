@@ -76,11 +76,14 @@ class ProductControllerIT {
     }
 
     @Test
-    void getProducts_noParams_returnsWholeCatalog() throws Exception {
+    void getProducts_noParams_returnsDefaultEnvelope() throws Exception {
         mockMvc.perform(get("/api/products").accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$", hasSize(27)));
+                .andExpect(jsonPath("$.items", hasSize(10)))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(10))
+                .andExpect(jsonPath("$.totalItems").value(27))
+                .andExpect(jsonPath("$.totalPages").value(3));
     }
 
     @Test
@@ -90,17 +93,18 @@ class ProductControllerIT {
                         .param("categoryId", String.valueOf(catId))
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].name", containsStringIgnoringCase("iphone")))
-                .andExpect(jsonPath("$.length()", greaterThanOrEqualTo(1)));
+                .andExpect(jsonPath("$.items[0].name", containsStringIgnoringCase("iphone")))
+                .andExpect(jsonPath("$.totalItems", greaterThanOrEqualTo(1)));
     }
 
     @Test
     void getProducts_sort_price_desc_works() throws Exception {
         mockMvc.perform(get("/api/products")
                         .param("sort", "price,desc")
+                        .param("size", "30")
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].price", greaterThan(120.0)));
+                .andExpect(jsonPath("$.items[0].price", greaterThan(120.0)));
     }
 
     @Test
@@ -109,8 +113,8 @@ class ProductControllerIT {
                         .param("minPrice", "120")
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(6)))
-                .andExpect(jsonPath("$[*].price", everyItem(greaterThanOrEqualTo(120.0))));
+                .andExpect(jsonPath("$.items", hasSize(6)))
+                .andExpect(jsonPath("$.items[*].price", everyItem(greaterThanOrEqualTo(120.0))));
     }
 
     @Test
@@ -119,8 +123,8 @@ class ProductControllerIT {
                         .param("maxPrice", "39.99")
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[*].name", containsInAnyOrder("Socks", "Winter jacket")));
+                .andExpect(jsonPath("$.items", hasSize(2)))
+                .andExpect(jsonPath("$.items[*].name", containsInAnyOrder("Socks", "Winter jacket")));
     }
 
     @Test
@@ -130,8 +134,8 @@ class ProductControllerIT {
                         .param("maxPrice", "115")
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(6)))
-                .andExpect(jsonPath("$[*].price", everyItem(allOf(
+                .andExpect(jsonPath("$.items", hasSize(6)))
+                .andExpect(jsonPath("$.items[*].price", everyItem(allOf(
                         greaterThanOrEqualTo(110.0), lessThanOrEqualTo(115.0)))));
     }
 
@@ -142,8 +146,8 @@ class ProductControllerIT {
                         .param("maxPrice", "125")
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].price").value(125.0));
+                .andExpect(jsonPath("$.items", hasSize(1)))
+                .andExpect(jsonPath("$.items[0].price").value(125.0));
     }
 
     @Test
@@ -152,7 +156,7 @@ class ProductControllerIT {
                         .param("minPrice", "5000")
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(0)));
+                .andExpect(jsonPath("$.items", hasSize(0)));
     }
 
     @Test
@@ -163,8 +167,8 @@ class ProductControllerIT {
                         .param("maxPrice", "50")
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].name").value("Winter jacket"));
+                .andExpect(jsonPath("$.items", hasSize(1)))
+                .andExpect(jsonPath("$.items[0].name").value("Winter jacket"));
     }
 
     @Test
@@ -200,10 +204,61 @@ class ProductControllerIT {
     }
 
     @Test
+    void getProducts_searchTreatsLikeWildcardsAsLiterals() throws Exception {
+        Category electronics = categoryRepository.findById(catId).orElseThrow();
+        productRepository.saveAll(java.util.List.of(
+                product("Search % literal", electronics),
+                product("Search X literal", electronics),
+                product("Search _ literal", electronics),
+                product("Search slash literal", electronics),
+                product("Search \\ literal", electronics)));
+
+        assertLiteralSearchReturnsOnly("%", "Search % literal");
+        assertLiteralSearchReturnsOnly("_", "Search _ literal");
+        assertLiteralSearchReturnsOnly("\\", "Search \\ literal");
+    }
+
+    @Test
+    void getProducts_nonFinitePrice_returnsBadRequest() throws Exception {
+        for (String[] parameter : java.util.List.of(
+                new String[]{"minPrice", "NaN"},
+                new String[]{"minPrice", "Infinity"},
+                new String[]{"minPrice", "-Infinity"},
+                new String[]{"maxPrice", "NaN"},
+                new String[]{"maxPrice", "Infinity"},
+                new String[]{"maxPrice", "-Infinity"})) {
+            mockMvc.perform(get("/api/products").param(parameter[0], parameter[1]))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.status").value(400))
+                    .andExpect(jsonPath("$.path").value("/api/products"))
+                    .andExpect(jsonPath("$.message").value(parameter[0] + " must be finite"));
+        }
+    }
+
+    @Test
     void getProductsByCategoryPath_stillWorks() throws Exception {
         mockMvc.perform(get("/api/products/category/{categoryId}", clothingId)
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(2)));
+    }
+
+    private void assertLiteralSearchReturnsOnly(String search, String expectedName) throws Exception {
+        mockMvc.perform(get("/api/products")
+                        .param("search", search)
+                        .param("size", "100")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[*].name", contains(expectedName)))
+                .andExpect(jsonPath("$.totalItems").value(1));
+    }
+
+    private Product product(String name, Category category) {
+        Product product = new Product();
+        product.setName(name);
+        product.setDescription(name);
+        product.setPrice(1.0);
+        product.setCategory(category);
+        return product;
     }
 }
