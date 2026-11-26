@@ -52,3 +52,19 @@ No finding is a security or authorization gap: this story has no authentication 
 **APPROVED WITH CHANGES**
 
 There is no architecture blocker that prevents implementation planning, but the implementation must adopt D-1 through D-4 and may adopt D-5 where numeric-safety behavior is implemented. The MAJOR findings are design/verifiability gaps rather than missing core requirements.
+
+## Agreed design decisions
+
+The user approved all proposed decisions, D-1 through D-5. The architecture updates applying them were committed in `f7bd507e07f3ff635661ecc7316e43de7c2d1fc0`.
+
+| Decision ID | Agreement | Applied in commit |
+|---|---|---|
+| D-1 | Agreed as proposed | `f7bd507e07f3ff635661ecc7316e43de7c2d1fc0` |
+| D-2 | Agreed as proposed | `f7bd507e07f3ff635661ecc7316e43de7c2d1fc0` |
+| D-3 | Agreed as proposed | `f7bd507e07f3ff635661ecc7316e43de7c2d1fc0` |
+| D-4 | Agreed as proposed | `f7bd507e07f3ff635661ecc7316e43de7c2d1fc0` |
+| D-5 | Agreed as proposed | `f7bd507e07f3ff635661ecc7316e43de7c2d1fc0` |
+
+## Final verdict
+
+**APPROVED**
